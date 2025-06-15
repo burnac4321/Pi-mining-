@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Panel - Pi Mining Simulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #1e1a3a;
+      color: #eee;
+      padding: 20px;
+      max-width: 1200px;
+      margin: auto;
+    }
+    h1, h2 {
+      color: #ae7ff6;
+    }
+    section {
+      margin-bottom: 40px;
+      background: #2b2750;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 0 10px #7656cc;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #4a4a7a;
+      text-align: left;
+      font-size: 14px;
+    }
+    th {
+      background-color: #3c3572;
+      font-weight: 600;
+    }
+    button {
+      background-color: #ae7ff6;
+      color: #1e1a3a;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+    }
+    button:hover:not(:disabled) {
+      background-color: #8f5de8;
+    }
+    button:disabled {
+      background-color: #6b61a1;
+      cursor: not-allowed;
+    }
+    #logoutBtn {
+      float: right;
+      margin-bottom: 20px;
+      background: #d55c5c;
+      color: white;
+    }
+    #logoutBtn:hover {
+      background: #b04646;
+    }
+    .loading {
+      font-style: italic;
+      color: #ccc;
+    }
+    .message {
+      margin-top: 10px;
+      color: #8bf48b;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h1>Admin Panel - Pi Mining Simulator</h1>
+  <button id="logoutBtn">Logout</button>
+
+  <section id="statsSection">
+    <h2>Users Stats</h2>
+    <p>Total users: <span id="totalUsers">Loading...</span></p>
+    <p>New users (last 7 days): <span id="newUsers">Loading...</span></p>
+  </section>
+
+  <section id="verificationSection">
+    <h2>Pending Pi Verification Transactions</h2>
+    <p>Users who need verification approval:</p>
+    <table id="verificationTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Wallet Address</th>
+          <th>Paid</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5" class="loading">Loading verification transactions...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="payoutSection">
+    <h2>Pending Withdrawal Requests</h2>
+    <table id="payoutTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Amount (Pi)</th>
+          <th>Wallet Address</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5" class="loading">Loading payout requests...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs,
+      query,
+      where,
+      updateDoc,
+      doc,
+      orderBy,
+      limit
+    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyATI_AQI4SGNhCmErcRqUhmCUY95aixG7E",
+      authDomain: "auto-bot-d9a8c.firebaseapp.com",
+      projectId: "auto-bot-d9a8c",
+      storageBucket: "auto-bot-d9a8c.firebasestorage.app",
+      messagingSenderId: "885545261511",
+      appId: "1:885545261511:web:1efa3955c6bfc8b3b5a1e2",
+      measurementId: "G-XW3XE9ZR4V"
+    };
+
+    const ADMIN_EMAIL = "admin@example.com"; // CHANGE to your admin email!
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const totalUsersSpan = document.getElementById("totalUsers");
+    const newUsersSpan = document.getElementById("newUsers");
+    const verificationTableBody = document.querySelector("#verificationTable tbody");
+    const payoutTableBody = document.querySelector("#payoutTable tbody");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    function createRow(cells) {
+      const tr = document.createElement("tr");
+      cells.forEach(cell => {
+        const td = document.createElement("td");
+        if (typeof cell === "string" || typeof cell === "number") {
+          td.textContent = cell;
+        } else {
+          td.appendChild(cell);
+        }
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+
+    function createButton(text, onClick, disabled = false) {
+      const btn = document.createElement("button");
+      btn.textContent = text;
+      btn.disabled = disabled;
+      btn.addEventListener("click", onClick);
+      return btn;
+    }
+
+    async function fetchStats() {
+      // Total users count
+      const usersCol = collection(db, "users");
+      const usersSnap = await getDocs(usersCol);
+      totalUsersSpan.textContent = usersSnap.size;
+
+      // New users last 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const newUsersQuery = query(usersCol, where("createdAt", ">=", sevenDaysAgo));
+      const newUsersSnap = await getDocs(newUsersQuery);
+      newUsersSpan.textContent = newUsersSnap.size;
+    }
+
+    async function fetchVerificationRequests() {
+      verificationTableBody.innerHTML = "";
+      // Fetch verification requests that are not approved yet
+      const verifCol = collection(db, "verificationPayments");
+      const verifQuery = query(verifCol, where("status", "==", "pending"));
+      const verifSnap = await getDocs(verifQuery);
+
+      if (verifSnap.empty) {
+        verificationTableBody.innerHTML = '<tr><td colspan="5">No pending verification transactions.</td></tr>';
+        return;
+      }
+
+      for (const docSnap of verifSnap.docs) {
+        const data = docSnap.data();
+        const userDoc = await doc(db, "users", data.userId);
+        const userSnap = await getDocs(query(collection(db, "users"), where("userId", "==", data.userId)));
+
+        // Better to get user data from users collection by doc id = userId
+        const userRef = doc(db, "users", data.userId);
+        const userDocSnap = await userRef.get ? await userRef.get() : await getDoc(userRef); // fallback getDoc()
+
+        const userData = userDocSnap.data ? userDocSnap.data() : null;
+
+        const userName = userData?.name || "Unknown";
+        const userEmail = userData?.email || "Unknown";
+
+        // Create approve button
+        const approveBtn = createButton("Approve", async () => {
+          approveBtn.disabled = true;
+          try {
+            // Mark verification as approved
+            await updateDoc(doc(db, "verificationPayments", docSnap.id), { status: "approved" });
+
+            // Mark user as verified so they can start mining
+            await updateDoc(doc(db, "users", data.userId), { isVerified: true });
+
+            alert(`User ${userName} has been approved for mining.`);
+            await fetchVerificationRequests(); // Refresh table
+          } catch (error) {
+            alert("Error approving verification: " + error.message);
+            approveBtn.disabled = false;
+          }
+        });
+
+        const row = createRow([
+          userName,
+          userEmail,
+          data.walletAddress || "-",
+          data.paid ? "Yes" : "No",
+          approveBtn
+        ]);
+        verificationTableBody.appendChild(row);
+      }
+    }
+
+    async function fetchPayoutRequests() {
+      payoutTableBody.innerHTML = "";
+
+      const payoutCol = collection(db, "withdrawRequests");
+      const payoutQuery = query(payoutCol, where("status", "==", "pending"));
+      const payoutSnap = await getDocs(payoutQuery);
+
+      if (payoutSnap.empty) {
+        payoutTableBody.innerHTML = '<tr><td colspan="5">No pending payout requests.</td></tr>';
+        return;
+      }
+
+      for (const docSnap of payoutSnap.docs) {
+        const data = docSnap.data();
+        const userDocRef = doc(db, "users", data.userId);
+        const userDocSnap = await getDoc(userDocRef);
+        const userData = userDocSnap.exists() ? userDocSnap.data() : {};
+
+        const userName = userData.name || "Unknown";
+        const userEmail = userData.email || "Unknown";
+
+        const approveBtn = createButton("Approve", async () => {
+          approveBtn.disabled = true;
+          try {
+            // Mark payout request as approved
+            await updateDoc(doc(db, "withdrawRequests", docSnap.id), { status: "approved", approvedAt: new Date() });
+
+            // Optionally deduct balance or mark in user doc to avoid double withdrawal
+
+            alert(`Payout request approved for ${userName} (${data.amount} Pi).`);
+            await fetchPayoutRequests();
+          } catch (error) {
+            alert("Error approving payout: " + error.message);
+            approveBtn.disabled = false;
+          }
+        });
+
+        const row = createRow([
+          userName,
+          userEmail,
+          data.amount.toFixed(4),
+          data.walletAddress,
+          approveBtn
+        ]);
+        payoutTableBody.appendChild(row);
+      }
+    }
+
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        if (user.email !== burnac321@gmail.com) {
+          alert("Access denied. You are not an admin.");
+          auth.signOut();
+          window.location.href = "login.html";
+          return;
+        }
+        fetchStats();
+        fetchVerificationRequests();
+        fetchPayoutRequests();
+      } else {
+        window.location.href = "login.html";
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      signOut(auth);
+    });
+  </script>
+</body>
+</html>
