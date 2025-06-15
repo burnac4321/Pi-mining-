@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pi Mining Dashboard</title>
+<meta name="description" content="Dashboard for Pi mining with referral bonuses and verification." />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #f9f6ff;
+    margin: 0; padding: 0;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+  }
+  .dashboard-container {
+    background: white;
+    padding: 30px 40px;
+    max-width: 480px;
+    width: 100%;
+    border-radius: 15px;
+    box-shadow: 0 0 25px rgba(94,60,157,0.2);
+    text-align: center;
+  }
+  h1 {
+    color: #5E3C9D;
+    margin-bottom: 30px;
+  }
+  .info {
+    font-size: 18px;
+    margin: 10px 0;
+  }
+  .countdown {
+    font-weight: 700;
+    font-size: 28px;
+    color: #5E3C9D;
+    margin: 25px 0 40px 0;
+  }
+  .alert {
+    background: #fce4e4;
+    color: #9d1c1c;
+    border: 1px solid #e07c7c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+  }
+  button {
+    background: #5E3C9D;
+    border: none;
+    color: white;
+    padding: 14px 30px;
+    margin: 10px 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background: #7d59bd;
+  }
+  a {
+    color: #5E3C9D;
+    text-decoration: none;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="dashboard-container">
+  <h1>Welcome to Your Pi Mining Dashboard</h1>
+  
+  <div id="verificationAlert" class="alert" style="display:none;">
+    ⚠️ You need to verify your account by paying 0.05 Pi transaction.<br/>
+    Please complete the payment to start mining.
+  </div>
+  
+  <div class="info">
+    <strong>Mining Rate:</strong> <span id="miningRate">--</span> Pi/hr
+  </div>
+  <div class="info">
+    <strong>Total Mined Pi:</strong> <span id="totalMined">0</span> Pi
+  </div>
+  
+  <div class="info countdown">
+    Time Left This Session:<br/>
+    <span id="countdownTimer">--:--:--</span>
+  </div>
+  
+  <button id="startMiningBtn">Start / Restart Mining</button>
+  
+  <div style="margin-top: 40px;">
+    <button onclick="location.href='withdraw.html'">Withdraw Pi</button>
+    <button onclick="location.href='invite.html'">Invite Friends</button>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyATI_AQI4SGNhCmErcRqUhmCUY95aixG7E",
+    authDomain: "auto-bot-d9a8c.firebaseapp.com",
+    projectId: "auto-bot-d9a8c",
+    storageBucket: "auto-bot-d9a8c.firebasestorage.app",
+    messagingSenderId: "885545261511",
+    appId: "1:885545261511:web:1efa3955c6bfc8b3b5a1e2",
+    measurementId: "G-XW3XE9ZR4V"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const miningRateElem = document.getElementById("miningRate");
+  const totalMinedElem = document.getElementById("totalMined");
+  const countdownElem = document.getElementById("countdownTimer");
+  const verificationAlert = document.getElementById("verificationAlert");
+  const startMiningBtn = document.getElementById("startMiningBtn");
+
+  // Constants
+  const MINING_SESSION_HOURS = 12;
+  const MINING_SESSION_MS = MINING_SESSION_HOURS * 60 * 60 * 1000;
+  const BASE_MINING_RATE = 0.1; // Pi/hr base rate
+
+  let userData = null;
+  let miningInterval = null;
+  let minedPi = 0;
+  let miningStartTime = null;
+
+  function formatTime(ms) {
+    let totalSeconds = Math.floor(ms / 1000);
+    let hrs = Math.floor(totalSeconds / 3600);
+    let mins = Math.floor((totalSeconds % 3600) / 60);
+    let secs = totalSeconds % 60;
+    return `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+  }
+
+  async function loadUserData(user) {
+    const userRef = doc(db, "users", user.uid);
+    const docSnap = await getDoc(userRef);
+    if (!docSnap.exists()) {
+      alert("User data not found. Please contact support.");
+      return;
+    }
+    userData = docSnap.data();
+
+    // Check verification
+    if (!userData.isVerified) {
+      verificationAlert.style.display = "block";
+    } else {
+      verificationAlert.style.display = "none";
+    }
+
+    // Calculate mining rate (base + referral bonuses)
+    const referralBonus = userData.referralBonus || 0;
+    const miningRate = BASE_MINING_RATE + referralBonus;
+    miningRateElem.textContent = miningRate.toFixed(2);
+
+    // Load total mined Pi so far
+    minedPi = userData.totalMined || 0;
+    totalMinedElem.textContent = minedPi.toFixed(4);
+
+    // Load last mining start timestamp or null
+    if (userData.lastMiningStart) {
+      miningStartTime = userData.lastMiningStart.toDate ? userData.lastMiningStart.toDate() : new Date(userData.lastMiningStart);
+    } else {
+      miningStartTime = null;
+    }
+
+    if (!miningStartTime) {
+      countdownElem.textContent = "00:00:00";
+    } else {
+      startCountdown();
+    }
+  }
+
+  function startCountdown() {
+    clearInterval(miningInterval);
+    function update() {
+      const now = new Date();
+      const elapsed = now - miningStartTime;
+      const remaining = MINING_SESSION_MS - elapsed;
+
+      if (remaining <= 0) {
+        countdownElem.textContent = "00:00:00";
+        clearInterval(miningInterval);
+        alert("Your 12-hour mining session ended. Please restart mining.");
+        return;
+      }
+
+      countdownElem.textContent = formatTime(remaining);
+
+      // Update mined Pi live:
+      // Mining rate is Pi per hour, convert to Pi per ms:
+      const miningRate = BASE_MINING_RATE + (userData.referralBonus || 0);
+      const piPerMs = miningRate / 3600000; 
+      const currentMined = minedPi + elapsed * piPerMs;
+      totalMinedElem.textContent = currentMined.toFixed(4);
+    }
+    update();
+    miningInterval = setInterval(update, 1000);
+  }
+
+  async function startMiningSession(user) {
+    if (!userData.isVerified) {
+      alert("Please verify your account by paying 0.05 Pi before starting mining.");
+      return;
+    }
+
+    miningStartTime = new Date();
+    minedPi = userData.totalMined || 0;
+
+    // Save mining start timestamp to Firestore
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, {
+      lastMiningStart: serverTimestamp()
+    });
+
+    startCountdown();
+  }
+
+  // Firebase auth state listener
+  onAuthStateChanged(auth, user => {
+    if (!user) {
+      alert("You must be logged in to access the dashboard.");
+      window.location.href = "login.html";
+      return;
+    }
+    loadUserData(user);
+  });
+
+  startMiningBtn.addEventListener("click", () => {
+    const user = auth.currentUser;
+    if (user) {
+      startMiningSession(user);
+    }
+  });
+</script>
+</body>
+</html>
