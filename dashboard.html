@@ -26,6 +26,13 @@
   h1 {
     color: #5E3C9D;
     margin-bottom: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #verificationStatus {
+    font-size: 24px;
+    margin-left: 10px;
   }
   .info {
     font-size: 18px;
@@ -70,7 +77,10 @@
 <body>
 
 <div class="dashboard-container">
-  <h1>Welcome to Your Pi Mining Dashboard</h1>
+  <h1>
+    Welcome to Your Pi Mining Dashboard
+    <span id="verificationStatus">⏳</span>
+  </h1>
   
   <div id="verificationAlert" class="alert" style="display:none;">
     ⚠️ You need to verify your account by paying 0.05 Pi transaction.<br/>
@@ -121,6 +131,7 @@
   const countdownElem = document.getElementById("countdownTimer");
   const verificationAlert = document.getElementById("verificationAlert");
   const startMiningBtn = document.getElementById("startMiningBtn");
+  const verificationStatus = document.getElementById("verificationStatus");
 
   // Constants
   const MINING_SESSION_HOURS = 12;
@@ -149,11 +160,13 @@
     }
     userData = docSnap.data();
 
-    // Check verification
-    if (!userData.isVerified) {
-      verificationAlert.style.display = "block";
-    } else {
+    // Show verification status tick or cross
+    if (userData.isVerified) {
+      verificationStatus.textContent = "✅";
       verificationAlert.style.display = "none";
+    } else {
+      verificationStatus.textContent = "❌";
+      verificationAlert.style.display = "block";
     }
 
     // Calculate mining rate (base + referral bonuses)
@@ -208,7 +221,8 @@
 
   async function startMiningSession(user) {
     if (!userData.isVerified) {
-      alert("Please verify your account by paying 0.05 Pi before starting mining.");
+      // Redirect unverified users to verify.html
+      window.location.href = "verify.html";
       return;
     }
 
