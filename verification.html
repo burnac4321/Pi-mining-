@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verify Your Account – Pi Mining Simulator</title>
+  <meta name="description" content="Complete your 0.05 Pi verification payment to unlock mining." />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f9f7fc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      max-width: 500px;
+      width: 100%;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h2 {
+      color: #5E3C9D;
+      margin-bottom: 15px;
+      font-size: 1.8rem;
+    }
+    p {
+      color: #555;
+      font-size: 1rem;
+      margin: 10px 0 20px;
+    }
+    .wallet-box {
+      background: #FDCB58;
+      color: #5E3C9D;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .wallet-box span {
+      word-break: break-all;
+    }
+    .wallet-box button {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: #5E3C9D;
+    }
+    form {
+      text-align: left;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: 500;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button.submit-btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 25px;
+      background: #5E3C9D;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button.submit-btn:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .message {
+      margin-top: 20px;
+      font-size: 0.95rem;
+      color: #d55c5c;
+    }
+    .message.success {
+      color: #28a745;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Account Verification</h2>
+    <p>To unlock mining, please send <strong>0.05 Pi</strong> to the wallet below, then submit your Transaction ID:</p>
+
+    <div class="wallet-box">
+      <span id="walletAddress">YOUR_PI_WALLET_ADDRESS_HERE</span>
+      <button id="copyWallet" title="Copy address">📋</button>
+    </div>
+
+    <form id="verifyForm">
+      <label for="txid">Transaction ID</label>
+      <input type="text" id="txid" placeholder="e.g. abc123def456..." required />
+
+      <button type="submit" class="submit-btn" id="submitBtn">Submit for Verification</button>
+    </form>
+
+    <p class="message" id="message"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+    // ** Replace this with your real wallet address **
+    const MY_PI_WALLET = "YOUR_PI_WALLET_ADDRESS_HERE";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyATI_AQI4SGNhCmErcRqUhmCUY95aixG7E",
+      authDomain: "auto-bot-d9a8c.firebaseapp.com",
+      projectId: "auto-bot-d9a8c",
+      storageBucket: "auto-bot-d9a8c.firebasestorage.app",
+      messagingSenderId: "885545261511",
+      appId: "1:885545261511:web:1efa3955c6bfc8b3b5a1e2",
+      measurementId: "G-XW3XE9ZR4V"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const walletEl = document.getElementById("walletAddress");
+    const copyBtn = document.getElementById("copyWallet");
+    const form = document.getElementById("verifyForm");
+    const txidInput = document.getElementById("txid");
+    const submitBtn = document.getElementById("submitBtn");
+    const msgEl = document.getElementById("message");
+
+    walletEl.textContent = MY_PI_WALLET;
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(MY_PI_WALLET).then(() => {
+        copyBtn.textContent = "✔️";
+        setTimeout(() => copyBtn.textContent = "📋", 1500);
+      });
+    });
+
+    let currentUser = null;
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+      currentUser = user;
+      // Check for existing pending verification
+      const q = query(
+        collection(db, "verificationPayments"),
+        where("userId", "==", user.uid),
+        where("status", "==", "pending")
+      );
+      const existing = await getDocs(q);
+      if (!existing.empty) {
+        msgEl.textContent = "You already have a pending verification request.";
+        submitBtn.disabled = true;
+      }
+    });
+
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const txid = txidInput.value.trim();
+      if (!txid || !currentUser) return;
+
+      submitBtn.disabled = true;
+      msgEl.textContent = "";
+
+      try {
+        await addDoc(collection(db, "verificationPayments"), {
+          userId: currentUser.uid,
+          walletAddress: MY_PI_WALLET,
+          txid,
+          status: "pending",
+          paid: true,
+          createdAt: serverTimestamp()
+        });
+        msgEl.textContent = "Your verification request has been submitted!";
+        msgEl.classList.add("success");
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = "Error submitting request. Please try again.";
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
