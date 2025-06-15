@@ -138,8 +138,7 @@
       where,
       updateDoc,
       doc,
-      orderBy,
-      limit
+      getDoc
     } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -152,7 +151,7 @@
       measurementId: "G-XW3XE9ZR4V"
     };
 
-    const ADMIN_EMAIL = "admin@example.com"; // CHANGE to your admin email!
+    const ADMIN_EMAIL = "burnac54321@gmail.com"; // Your admin email
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -213,17 +212,12 @@
 
       for (const docSnap of verifSnap.docs) {
         const data = docSnap.data();
-        const userDoc = await doc(db, "users", data.userId);
-        const userSnap = await getDocs(query(collection(db, "users"), where("userId", "==", data.userId)));
+        const userDocRef = doc(db, "users", data.userId);
+        const userDocSnap = await getDoc(userDocRef);
+        const userData = userDocSnap.exists() ? userDocSnap.data() : {};
 
-        // Better to get user data from users collection by doc id = userId
-        const userRef = doc(db, "users", data.userId);
-        const userDocSnap = await userRef.get ? await userRef.get() : await getDoc(userRef); // fallback getDoc()
-
-        const userData = userDocSnap.data ? userDocSnap.data() : null;
-
-        const userName = userData?.name || "Unknown";
-        const userEmail = userData?.email || "Unknown";
+        const userName = userData.name || "Unknown";
+        const userEmail = userData.email || "Unknown";
 
         // Create approve button
         const approveBtn = createButton("Approve", async () => {
@@ -304,7 +298,7 @@
 
     onAuthStateChanged(auth, user => {
       if (user) {
-        if (user.email !== burnac321@gmail.com) {
+        if (user.email !== ADMIN_EMAIL) {
           alert("Access denied. You are not an admin.");
           auth.signOut();
           window.location.href = "login.html";
