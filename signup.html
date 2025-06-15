@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up - Pi Mining Simulator</title>
+  <meta name="description" content="Create your account and start mining Pi-style coins. Invite friends to boost your mining rate.">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #fef9ff;
+      color: #333;
+      padding: 20px;
+    }
+    .container {
+      max-width: 420px;
+      margin: auto;
+      background: #fff;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #5E3C9D;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: 500;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      margin-top: 25px;
+      padding: 12px;
+      background-color: #5E3C9D;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .note {
+      text-align: center;
+      font-size: 14px;
+      margin-top: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Create Account</h2>
+    <form id="signupForm">
+      <label for="name">Full Name</label>
+      <input type="text" id="name" required />
+
+      <label for="email">Email</label>
+      <input type="email" id="email" required />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required />
+
+      <label for="referral">Referral Code (Optional)</label>
+      <input type="text" id="referral" placeholder="e.g. REF12345" />
+
+      <button type="submit">Sign Up</button>
+    </form>
+    <p class="note">Already have an account? <a href="login.html">Login</a></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, where, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyATI_AQI4SGNhCmErcRqUhmCUY95aixG7E",
+      authDomain: "auto-bot-d9a8c.firebaseapp.com",
+      projectId: "auto-bot-d9a8c",
+      storageBucket: "auto-bot-d9a8c.firebasestorage.app",
+      messagingSenderId: "885545261511",
+      appId: "1:885545261511:web:1efa3955c6bfc8b3b5a1e2",
+      measurementId: "G-XW3XE9ZR4V"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    document.getElementById("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const referral = document.getElementById("referral").value.trim().toUpperCase();
+      const referralCode = "REF" + Math.random().toString(36).substring(2, 8).toUpperCase();
+      let miningRate = 0.2;
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = userCredential.user.uid;
+
+        // Check if referral is valid and update referrer
+        if (referral) {
+          const q = query(collection(db, "users"), where("referralCode", "==", referral));
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            const refDoc = snapshot.docs[0];
+            const refDocId = refDoc.id;
+            const refData = refDoc.data();
+            const newRate = (refData.miningRate || 0.2) + 0.1;
+
+            await updateDoc(doc(db, "users", refDocId), {
+              miningRate: newRate
+            });
+          }
+        }
+
+        // Save user data to Firestore
+        await setDoc(doc(db, "users", uid), {
+          name,
+          email,
+          referralUsed: referral || null,
+          referralCode,
+          miningRate,
+          createdAt: new Date()
+        });
+
+        alert("Account created! Your referral code: " + referralCode);
+        window.location.href = "login.html";
+      } catch (error) {
+        console.error("Signup error:", error);
+        alert("Signup failed: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>
